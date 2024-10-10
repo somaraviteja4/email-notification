@@ -1,0 +1,91 @@
+# coding: utf-8
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
+import threading
+import logging
+import os
+import datetime
+import time
+import sys
+import re
+import urllib
+import base64
+import xml.sax
+import xml.dom
+from xml.dom import minidom
+import fnmatch
+from urllib.parse import quote
+import string
+import pprint
+from io import StringIO
+
+# Function to create the email message
+def createMessage(html, bcc_addr):
+    msg = MIMEMultipart('related')
+    msg['Subject'] = "subject"
+    msg['From'] = from_addr
+    msg['To'] = to_addr
+    msg['Bcc'] = bcc_addr
+
+    matches = re.findall(r'img src="([^"]+)"', html)
+    matchcount = 1
+
+    # Prepare HTML and image attachments
+    for match in matches:
+        html = re.sub(match, "cid:image" + str(matchcount), html)
+        matchcount += 1
+
+    part = MIMEText(html, 'html')
+    msg.attach(part)
+
+    emailTemplateFolder = os.path.dirname(content)
+
+    for match in matches:
+        imaddr = os.path.join(emailTemplateFolder, match)
+        with open(imaddr, 'rb') as imagefile:
+            msgImg = MIMEImage(imagefile.read(), 'gif')
+            msgImg.add_header('Content-ID', '<image' + str(matchcount) + '>')
+            msgImg.add_header('Content-Disposition', 'inline', filename=os.path.basename(imaddr))
+            msg.attach(msgImg)
+            matchcount += 1
+
+    return msg
+
+# Function to send the email
+def send_Email(bcc_emails):
+    server = smtplib.SMTP('smtphost.fm.rbsgrp.net', 25)
+    server.set_debuglevel(1)
+
+    body_text = createMessage(html, bcc_emails)
+    recipient_list = [to_addr] + bcc_emails.split(',')
+    
+    # Send email
+    server.sendmail(from_addr, recipient_list, body_text.as_string())
+    server.quit()
+
+# Usage check
+if len(sys.argv) != 4:
+    print("Usage: ./sendEmail.py <emailHtmlTemplate> <fileContainingEMails> <EMailSubject>")
+    print("Email List must be separated by colon. One line should contain not more than 300 emails")
+    sys.exit(1)
+
+content = sys.argv[1]
+emailFile = str(sys.argv[2])
+subject = str(sys.argv[3])
+
+from_addr = "from_email@example.com"  # Replace with actual sender email
+to_addr = "to_email@example.com"  # Replace with actual recipient email
+
+# Read HTML content
+with open(content, "r") as f:
+    html = f.read()
+
+# Process and send emails
+with open(emailFile, 'r') as f:
+    for line in f:
+        th = threading.Thread(target=send_Email, args=(line.strip(),))  # Strip newline characters
+        th.start()
+
+print("Done!")
